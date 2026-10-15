@@ -1,0 +1,1 @@
+a simple interface to handle REST api
