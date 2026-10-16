@@ -24,7 +24,7 @@ A terminal-based REST API client built with Python and Textual. Send HTTP reques
 Clone the repository and enter the project directory:
 
 ```bash
-git clone <YOUR_GITHUB_REPOSITORY_URL>
+git clone git@github.com:humphrey-de-conqueror/api-toolkit.git
 cd api-toolkit
 ```
 
