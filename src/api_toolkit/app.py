@@ -20,6 +20,15 @@ from textual.widgets import (
 from api_toolkit.http_client import send_request
 from api_toolkit.curl_generator import build_curl_command
 
+import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+from api_toolkit.request_storage import (
+    list_saved_requests,
+    load_request,
+    save_request,
+)
+
 
 class ApiToolkitApp(App):
     """Interactive terminal interface for a generic REST API client."""
@@ -149,6 +158,34 @@ class ApiToolkitApp(App):
     #response-body {
         height: auto;
     }
+
+    #saved-toolbar {
+        height: 3;
+        margin-bottom: 0;
+    }
+
+    #saved-name {
+        width: 1fr;
+        margin-right: 1;
+    }
+
+    #saved-select {
+        width: 1fr;
+        margin-right: 1;
+    }
+
+    #save-request,
+    #load-request,
+    #refresh-requests {
+        width: 12;
+        margin-right: 1;
+    }
+
+    #saved-status {
+        height: 1;
+        margin-bottom: 1;
+    }
+
     """
 
     def compose(self) -> ComposeResult:
@@ -204,6 +241,28 @@ class ApiToolkitApp(App):
             "Generate a command, or copy the request URL directly.",
             id="curl-warning",
         )
+
+
+        with Horizontal(id="saved-toolbar"):
+            yield Input(
+                placeholder="Saved request name",
+                id="saved-name",
+            )
+            yield Select(
+                [(name, name) for name in list_saved_requests()],
+                prompt="Select saved request",
+                allow_blank=True,
+                id="saved-select",
+            )
+            yield Button("Save", id="save-request")
+            yield Button("Load", id="load-request")
+            yield Button("Refresh", id="refresh-requests")
+
+        yield Static(
+            "Save a request configuration to reuse it later.",
+            id="saved-status",
+        )
+
 
         with Horizontal(id="workspace"):
             with VerticalScroll(id="request-panel"):
@@ -547,6 +606,231 @@ class ApiToolkitApp(App):
             json_body,
             auth,
         )
+
+    @staticmethod
+    def redact_sensitive_data(data):
+        """Redact values whose field names suggest they are secrets."""
+
+        sensitive_pattern = re.compile(
+            r"token|secret|password|passwd|api[_-]?key|"
+            r"authorization|cookie|credential",
+            re.IGNORECASE,
+        )
+
+        if isinstance(data, dict):
+            return {
+                key: (
+                    ""
+                    if sensitive_pattern.search(str(key))
+                    else ApiToolkitApp.redact_sensitive_data(value)
+                )
+                for key, value in data.items()
+            }
+
+        if isinstance(data, list):
+            return [
+                ApiToolkitApp.redact_sensitive_data(item)
+                for item in data
+            ]
+
+        return data
+
+    @staticmethod
+    def redact_url(url: str) -> str:
+        """Remove sensitive values from URL query parameters."""
+
+        parts = urlsplit(url)
+        sensitive_pattern = re.compile(
+            r"token|secret|password|passwd|api[_-]?key|credential",
+            re.IGNORECASE,
+        )
+
+        query = [
+            (
+                key,
+                "" if sensitive_pattern.search(key) else value,
+            )
+            for key, value in parse_qsl(
+                parts.query,
+                keep_blank_values=True,
+            )
+        ]
+
+        return urlunsplit(
+            (
+                parts.scheme,
+                parts.netloc,
+                parts.path,
+                urlencode(query),
+                parts.fragment,
+            )
+        )
+
+    @on(Button.Pressed, "#save-request")
+    def on_save_request_pressed(self) -> None:
+        name = self.query_one("#saved-name", Input).value.strip()
+
+        if not name:
+            self.query_one("#saved-status", Static).update(
+                "Enter a name before saving."
+            )
+            return
+
+        try:
+            method = self.query_one("#method", Select).value
+            url = self.query_one("#url", Input).value.strip()
+
+            if not isinstance(method, str):
+                raise ValueError("Select an HTTP method.")
+
+            if not url:
+                raise ValueError("Enter a URL.")
+
+            # Validate JSON before saving.
+            params = self.parse_json_object(
+                self.query_one("#params", TextArea).text,
+                "Query parameters",
+            )
+            headers = self.parse_json_object(
+                self.query_one("#headers", TextArea).text,
+                "Headers",
+            )
+            body = self.parse_json_body(
+                self.query_one("#body", TextArea).text
+            )
+
+            auth_type = self.query_one("#auth-type", Select).value
+
+            configuration = {
+                "method": method,
+                "url": self.redact_url(url),
+                "params": self.redact_sensitive_data(params),
+                "headers": self.redact_sensitive_data(headers),
+                "body": self.redact_sensitive_data(body),
+                "auth_type": auth_type,
+                "api_key_name": self.query_one(
+                    "#api-key-name", Input
+                ).value,
+                "api_key_location": self.query_one(
+                    "#api-key-location", Select
+                ).value,
+                "basic_username": self.query_one(
+                    "#basic-username", Input
+                ).value,
+            }
+
+            save_request(name, configuration)
+            self.refresh_saved_requests(selected=name)
+
+            self.query_one("#saved-status", Static).update(
+                f"Saved request: {name}. Secret values were excluded."
+            )
+
+        except (ValueError, OSError) as exc:
+            self.query_one("#saved-status", Static).update(
+                f"Could not save request: {exc}"
+            )
+
+
+    def refresh_saved_requests(
+        self,
+        selected: str | None = None,
+    ) -> None:
+        saved_select = self.query_one("#saved-select", Select)
+        names = list_saved_requests()
+
+        saved_select.set_options(
+            [(name, name) for name in names]
+        )
+
+        if selected in names:
+            saved_select.value = selected
+        else:
+            saved_select.clear()
+
+
+    @on(Button.Pressed, "#refresh-requests")
+    def on_refresh_requests_pressed(self) -> None:
+        self.refresh_saved_requests()
+        self.query_one("#saved-status", Static).update(
+            "Saved request list refreshed."
+        )
+
+    @on(Button.Pressed, "#load-request")
+    def on_load_request_pressed(self) -> None:
+        name = self.query_one("#saved-select", Select).value
+
+        if not isinstance(name, str):
+            self.query_one("#saved-status", Static).update(
+                "Select a saved request first."
+            )
+            return
+
+        try:
+            configuration = load_request(name)
+
+            method = configuration.get("method", "GET")
+            if method not in ("GET", "POST", "PUT", "PATCH", "DELETE"):
+                raise ValueError("Saved HTTP method is invalid.")
+
+            url = configuration.get("url", "")
+            if not isinstance(url, str):
+                raise ValueError("Saved URL is invalid.")
+
+            params = configuration.get("params", {})
+            headers = configuration.get("headers", {})
+            body = configuration.get("body")
+
+            if not isinstance(params, dict) or not isinstance(headers, dict):
+                raise ValueError("Saved parameters or headers are invalid.")
+
+            self.query_one("#method", Select).value = method
+            self.query_one("#url", Input).value = url
+            self.query_one("#params", TextArea).text = json.dumps(
+                params, indent=2, ensure_ascii=False
+            )
+            self.query_one("#headers", TextArea).text = json.dumps(
+                headers, indent=2, ensure_ascii=False
+            )
+            self.query_one("#body", TextArea).text = (
+                json.dumps(body, indent=2, ensure_ascii=False)
+                if body is not None
+                else ""
+            )
+
+            auth_type = configuration.get("auth_type", "none")
+            valid_auth_types = ("none", "bearer", "api_key", "basic")
+
+            if auth_type not in valid_auth_types:
+                auth_type = "none"
+
+            self.query_one("#auth-type", Select).value = auth_type
+
+            # Never restore secret values from saved configurations.
+            self.query_one("#bearer-token", Input).value = ""
+            self.query_one("#api-key-value", Input).value = ""
+            self.query_one("#basic-password", Input).value = ""
+
+            self.query_one("#api-key-name", Input).value = (
+                configuration.get("api_key_name", "")
+            )
+            self.query_one("#api-key-location", Select).value = (
+                configuration.get("api_key_location", "header")
+            )
+            self.query_one("#basic-username", Input).value = (
+                configuration.get("basic_username", "")
+            )
+
+            self.query_one("#curl-command", TextArea).text = ""
+            self.query_one("#saved-status", Static).update(
+                f"Loaded: {name}. Re-enter any required credentials."
+            )
+
+        except (ValueError, OSError, json.JSONDecodeError) as exc:
+            self.query_one("#saved-status", Static).update(
+                f"Could not load request: {exc}"
+            )
+
 
     @on(Button.Pressed, "#generate-curl")
     def on_generate_curl_pressed(self) -> None:

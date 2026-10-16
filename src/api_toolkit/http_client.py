@@ -22,6 +22,7 @@ def send_request(
     headers: dict[str, str] | None = None,
     params: dict[str, str] | None = None,
     json_body: dict | list | None = None,
+    auth: tuple[str, str] | None = None,
     timeout: float = 15.0,
 ) -> ApiResponse:
     """Send an HTTP request and return a structured response."""
@@ -39,10 +40,10 @@ def send_request(
                 headers=headers,
                 params=params,
                 json=json_body,
+                auth=auth,
             )
 
         elapsed_ms = (time.perf_counter() - start) * 1000
-
         content_type = response.headers.get("content-type", "")
 
         if "application/json" in content_type:
