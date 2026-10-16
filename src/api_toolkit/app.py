@@ -1,6 +1,7 @@
-
 import asyncio
 import json
+import re
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import httpx
 from textual import on, work
@@ -17,12 +18,8 @@ from textual.widgets import (
     TextArea,
 )
 
-from api_toolkit.http_client import send_request
 from api_toolkit.curl_generator import build_curl_command
-
-import re
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
-
+from api_toolkit.http_client import send_request
 from api_toolkit.request_storage import (
     list_saved_requests,
     load_request,
@@ -242,7 +239,6 @@ class ApiToolkitApp(App):
             id="curl-warning",
         )
 
-
         with Horizontal(id="saved-toolbar"):
             yield Input(
                 placeholder="Saved request name",
@@ -262,7 +258,6 @@ class ApiToolkitApp(App):
             "Save a request configuration to reuse it later.",
             id="saved-status",
         )
-
 
         with Horizontal(id="workspace"):
             with VerticalScroll(id="request-panel"):
@@ -417,8 +412,7 @@ class ApiToolkitApp(App):
             data = json.loads(raw_text)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"{field_name}: invalid JSON at line {exc.lineno}, "
-                f"column {exc.colno}."
+                f"{field_name}: invalid JSON at line {exc.lineno}, column {exc.colno}."
             ) from exc
 
         if not isinstance(data, dict):
@@ -426,9 +420,7 @@ class ApiToolkitApp(App):
 
         for key, value in data.items():
             if not isinstance(key, str) or not isinstance(value, str):
-                raise ValueError(
-                    f"{field_name}: keys and values must be strings."
-                )
+                raise ValueError(f"{field_name}: keys and values must be strings.")
 
         return data
 
@@ -443,14 +435,11 @@ class ApiToolkitApp(App):
             data = json.loads(raw_text)
         except json.JSONDecodeError as exc:
             raise ValueError(
-                f"Request body: invalid JSON at line {exc.lineno}, "
-                f"column {exc.colno}."
+                f"Request body: invalid JSON at line {exc.lineno}, column {exc.colno}."
             ) from exc
 
         if not isinstance(data, (dict, list)):
-            raise ValueError(
-                "Request body must be a JSON object or array."
-            )
+            raise ValueError("Request body must be a JSON object or array.")
 
         return data
 
@@ -468,9 +457,7 @@ class ApiToolkitApp(App):
         auth_type = self.query_one("#auth-type", Select).value
 
         if auth_type == "bearer":
-            token = self.query_one(
-                "#bearer-token", Input
-            ).value.strip()
+            token = self.query_one("#bearer-token", Input).value.strip()
 
             if not token:
                 raise ValueError("Please enter a Bearer token.")
@@ -479,21 +466,13 @@ class ApiToolkitApp(App):
             headers["Authorization"] = f"Bearer {token}"
 
         elif auth_type == "api_key":
-            name = self.query_one(
-                "#api-key-name", Input
-            ).value.strip()
-            value = self.query_one(
-                "#api-key-value", Input
-            ).value
+            name = self.query_one("#api-key-name", Input).value.strip()
+            value = self.query_one("#api-key-value", Input).value
 
             if not name or not value:
-                raise ValueError(
-                    "Enter both the API key name and value."
-                )
+                raise ValueError("Enter both the API key name and value.")
 
-            location = self.query_one(
-                "#api-key-location", Select
-            ).value
+            location = self.query_one("#api-key-location", Select).value
 
             params = dict(params)
             headers = dict(headers)
@@ -506,12 +485,8 @@ class ApiToolkitApp(App):
                 raise ValueError("Unsupported API key location.")
 
         elif auth_type == "basic":
-            username = self.query_one(
-                "#basic-username", Input
-            ).value
-            password = self.query_one(
-                "#basic-password", Input
-            ).value
+            username = self.query_one("#basic-username", Input).value
+            password = self.query_one("#basic-password", Input).value
 
             if not username:
                 raise ValueError("Please enter a username.")
@@ -562,9 +537,7 @@ class ApiToolkitApp(App):
             "Headers",
         )
 
-        json_body = self.parse_json_body(
-            self.query_one("#body", TextArea).text
-        )
+        json_body = self.parse_json_body(self.query_one("#body", TextArea).text)
 
         auth, params, headers = self.build_authentication(
             params,
@@ -583,20 +556,12 @@ class ApiToolkitApp(App):
                 self.get_request_configuration()
             )
         except ValueError as exc:
-            self.query_one("#status", Static).update(
-                f"Input error: {exc}"
-            )
+            self.query_one("#status", Static).update(f"Input error: {exc}")
             return
 
-        self.query_one("#status", Static).update(
-            "Sending request..."
-        )
-        self.query_one("#response-headers", Static).update(
-            "Waiting for response..."
-        )
-        self.query_one("#response-body", Static).update(
-            "Waiting for response..."
-        )
+        self.query_one("#status", Static).update("Sending request...")
+        self.query_one("#response-headers", Static).update("Waiting for response...")
+        self.query_one("#response-body", Static).update("Waiting for response...")
 
         self.send_request_worker(
             method,
@@ -628,10 +593,7 @@ class ApiToolkitApp(App):
             }
 
         if isinstance(data, list):
-            return [
-                ApiToolkitApp.redact_sensitive_data(item)
-                for item in data
-            ]
+            return [ApiToolkitApp.redact_sensitive_data(item) for item in data]
 
         return data
 
@@ -695,9 +657,7 @@ class ApiToolkitApp(App):
                 self.query_one("#headers", TextArea).text,
                 "Headers",
             )
-            body = self.parse_json_body(
-                self.query_one("#body", TextArea).text
-            )
+            body = self.parse_json_body(self.query_one("#body", TextArea).text)
 
             auth_type = self.query_one("#auth-type", Select).value
 
@@ -708,15 +668,9 @@ class ApiToolkitApp(App):
                 "headers": self.redact_sensitive_data(headers),
                 "body": self.redact_sensitive_data(body),
                 "auth_type": auth_type,
-                "api_key_name": self.query_one(
-                    "#api-key-name", Input
-                ).value,
-                "api_key_location": self.query_one(
-                    "#api-key-location", Select
-                ).value,
-                "basic_username": self.query_one(
-                    "#basic-username", Input
-                ).value,
+                "api_key_name": self.query_one("#api-key-name", Input).value,
+                "api_key_location": self.query_one("#api-key-location", Select).value,
+                "basic_username": self.query_one("#basic-username", Input).value,
             }
 
             save_request(name, configuration)
@@ -731,7 +685,6 @@ class ApiToolkitApp(App):
                 f"Could not save request: {exc}"
             )
 
-
     def refresh_saved_requests(
         self,
         selected: str | None = None,
@@ -739,22 +692,17 @@ class ApiToolkitApp(App):
         saved_select = self.query_one("#saved-select", Select)
         names = list_saved_requests()
 
-        saved_select.set_options(
-            [(name, name) for name in names]
-        )
+        saved_select.set_options([(name, name) for name in names])
 
         if selected in names:
             saved_select.value = selected
         else:
             saved_select.clear()
 
-
     @on(Button.Pressed, "#refresh-requests")
     def on_refresh_requests_pressed(self) -> None:
         self.refresh_saved_requests()
-        self.query_one("#saved-status", Static).update(
-            "Saved request list refreshed."
-        )
+        self.query_one("#saved-status", Static).update("Saved request list refreshed.")
 
     @on(Button.Pressed, "#load-request")
     def on_load_request_pressed(self) -> None:
@@ -811,14 +759,14 @@ class ApiToolkitApp(App):
             self.query_one("#api-key-value", Input).value = ""
             self.query_one("#basic-password", Input).value = ""
 
-            self.query_one("#api-key-name", Input).value = (
-                configuration.get("api_key_name", "")
+            self.query_one("#api-key-name", Input).value = configuration.get(
+                "api_key_name", ""
             )
-            self.query_one("#api-key-location", Select).value = (
-                configuration.get("api_key_location", "header")
+            self.query_one("#api-key-location", Select).value = configuration.get(
+                "api_key_location", "header"
             )
-            self.query_one("#basic-username", Input).value = (
-                configuration.get("basic_username", "")
+            self.query_one("#basic-username", Input).value = configuration.get(
+                "basic_username", ""
             )
 
             self.query_one("#curl-command", TextArea).text = ""
@@ -830,7 +778,6 @@ class ApiToolkitApp(App):
             self.query_one("#saved-status", Static).update(
                 f"Could not load request: {exc}"
             )
-
 
     @on(Button.Pressed, "#generate-curl")
     def on_generate_curl_pressed(self) -> None:
@@ -863,9 +810,7 @@ class ApiToolkitApp(App):
         command = self.query_one("#curl-command", TextArea).text
 
         if not command.strip():
-            self.query_one("#curl-warning", Static).update(
-                "Click Generate cURL first."
-            )
+            self.query_one("#curl-warning", Static).update("Click Generate cURL first.")
             return
 
         try:
@@ -873,7 +818,7 @@ class ApiToolkitApp(App):
             self.query_one("#curl-warning", Static).update(
                 "cURL copy requested. Try pasting into your terminal."
             )
-        except Exception as exc:
+        except (RuntimeError, OSError) as exc:
             self.query_one("#curl-warning", Static).update(
                 f"Clipboard failed: {exc}. Select and copy manually."
             )
@@ -892,43 +837,26 @@ class ApiToolkitApp(App):
             )
 
             # Include the API key when configured as a query parameter.
-            auth_type = self.query_one(
-                "#auth-type", Select
-            ).value
+            auth_type = self.query_one("#auth-type", Select).value
 
             if (
                 auth_type == "api_key"
-                and self.query_one(
-                    "#api-key-location", Select
-                ).value == "query"
+                and self.query_one("#api-key-location", Select).value == "query"
             ):
-                name = self.query_one(
-                    "#api-key-name", Input
-                ).value.strip()
-                value = self.query_one(
-                    "#api-key-value", Input
-                ).value
+                name = self.query_one("#api-key-name", Input).value.strip()
+                value = self.query_one("#api-key-value", Input).value
 
                 if not name or not value:
-                    raise ValueError(
-                        "Enter both the API key name and value."
-                    )
+                    raise ValueError("Enter both the API key name and value.")
 
                 params[name] = value
 
             parsed_url = httpx.URL(url)
 
-            if (
-                parsed_url.scheme not in ("http", "https")
-                or not parsed_url.host
-            ):
-                raise ValueError(
-                    "Enter a valid HTTP or HTTPS URL."
-                )
+            if parsed_url.scheme not in ("http", "https") or not parsed_url.host:
+                raise ValueError("Enter a valid HTTP or HTTPS URL.")
 
-            complete_url = str(
-                parsed_url.copy_merge_params(params)
-            )
+            complete_url = str(parsed_url.copy_merge_params(params))
 
             self.copy_to_clipboard(complete_url)
 
@@ -937,10 +865,8 @@ class ApiToolkitApp(App):
             )
 
         except (ValueError, httpx.InvalidURL) as exc:
-            self.query_one("#curl-warning", Static).update(
-                f"Cannot copy URL: {exc}"
-            )
-        except Exception as exc:
+            self.query_one("#curl-warning", Static).update(f"Cannot copy URL: {exc}")
+        except (RuntimeError, OSError) as exc:
             self.query_one("#curl-warning", Static).update(
                 f"Clipboard failed: {exc}. Copy the URL manually."
             )
@@ -967,14 +893,10 @@ class ApiToolkitApp(App):
 
         if response.error:
             status_text = (
-                f"Request failed | {response.elapsed_ms:.2f} ms\n"
-                f"{response.error}"
+                f"Request failed | {response.elapsed_ms:.2f} ms\n{response.error}"
             )
         else:
-            status_text = (
-                f"HTTP {response.status_code} | "
-                f"{response.elapsed_ms:.2f} ms"
-            )
+            status_text = f"HTTP {response.status_code} | {response.elapsed_ms:.2f} ms"
 
         self.query_one("#status", Static).update(status_text)
 
@@ -985,9 +907,7 @@ class ApiToolkitApp(App):
         )
 
         self.query_one("#response-headers", Static).update(
-            formatted_headers
-            if response.headers
-            else "No headers available."
+            formatted_headers if response.headers else "No headers available."
         )
 
         self.query_one("#response-body", Static).update(

@@ -1,13 +1,9 @@
-
 import json
 import re
 from pathlib import Path
 from typing import Any
 
-
-SAVED_REQUESTS_DIR = (
-    Path.home() / ".config" / "api-toolkit" / "saved_requests"
-)
+SAVED_REQUESTS_DIR = Path.home() / ".config" / "api-toolkit" / "saved_requests"
 
 
 def _get_request_path(name: str) -> Path:
@@ -20,9 +16,7 @@ def _get_request_path(name: str) -> Path:
     ).strip("_")
 
     if not cleaned_name:
-        raise ValueError(
-            "Request name must contain letters or numbers."
-        )
+        raise ValueError("Request name must contain letters or numbers.")
 
     return SAVED_REQUESTS_DIR / f"{cleaned_name}.json"
 
@@ -59,20 +53,14 @@ def load_request(name: str) -> dict[str, Any]:
     path = _get_request_path(name)
 
     if not path.is_file():
-        raise FileNotFoundError(
-            f"Saved request '{name}' was not found."
-        )
+        raise FileNotFoundError(f"Saved request '{name}' was not found.")
 
-    saved_data = json.loads(
-        path.read_text(encoding="utf-8")
-    )
+    saved_data = json.loads(path.read_text(encoding="utf-8"))
 
     configuration = saved_data.get("configuration")
 
     if not isinstance(configuration, dict):
-        raise ValueError(
-            "Saved request contains an invalid configuration."
-        )
+        raise ValueError("Saved request contains an invalid configuration.")
 
     return configuration
 
@@ -87,9 +75,7 @@ def list_saved_requests() -> list[str]:
 
     for path in SAVED_REQUESTS_DIR.glob("*.json"):
         try:
-            saved_data = json.loads(
-                path.read_text(encoding="utf-8")
-            )
+            saved_data = json.loads(path.read_text(encoding="utf-8"))
             name = saved_data.get("name")
 
             if isinstance(name, str):

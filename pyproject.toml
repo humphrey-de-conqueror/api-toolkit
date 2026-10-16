@@ -1,7 +1,7 @@
 [project]
 name = "api-toolkit"
 version = "0.1.0"
-description = "Add your description here"
+description = "A terminal-based REST API client built with Python and Textual"
 readme = "README.md"
 authors = [
     { name = "Gordon", email = "work.gordonyewyangliew@gmail.com" }
@@ -24,3 +24,7 @@ dev = [
     "pytest>=9.1.1",
     "ruff>=0.17.0",
 ]
+
+[tool.ruff.lint]
+# Keep your existing select list.
+ignore = ["TRY004", "BLE001"]
